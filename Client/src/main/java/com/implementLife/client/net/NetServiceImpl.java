@@ -8,11 +8,13 @@ import org.springframework.http.MediaType;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.lang.reflect.Proxy;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static com.implementLife.client.PropService.getPropService;
 
 public final class NetServiceImpl implements NetService {
     //region Singleton
@@ -30,15 +32,20 @@ public final class NetServiceImpl implements NetService {
     //endregion
 
     private static final String BASE_URL = "http://ilfa.dp.ua:8080";
-    private static final String UUID_PROPERTY = "implLifeClientUUID";
-
     private final RestTemplate consumer = new RestTemplate();
-    private String uuidOfThisDevice = System.getProperty(UUID_PROPERTY);
+    private String uuidOfThisDevice = getPropService().getId();
     private Player currentPlayer;
+
+    private Player getCurrentPlayer() {
+        return currentPlayer;
+    }
+    private void setCurrentPlayer(Player currentPlayer) {
+        this.currentPlayer = currentPlayer;
+    }
 
     @Override
     public Room getRoom(String uuid) {
-        return consumer.getForObject(url("/getRoom"), Room.class, uri(new P("uuid", uuid)));
+        return consumer.getForObject(url("/getRoom", new P("uuid", uuid)), Room.class);
     }
 
     @Override
@@ -47,26 +54,27 @@ public final class NetServiceImpl implements NetService {
         if (player == null) {
             throw new RuntimeException("Bad Register");
         }
-        currentPlayer = player;
-        System.setProperty(UUID_PROPERTY, player.getId().toString());
+        setCurrentPlayer(player);
+        getPropService().saveId(player.getId().toString());
         return player;
     }
 
     @Override
     public Player getPlayer() {
-        if (currentPlayer != null) {
-            return currentPlayer;
+        if (getCurrentPlayer() != null) {
+            return getCurrentPlayer();
         }
         if (uuidOfThisDevice == null) {
             uuidOfThisDevice = registerPlayer().getId().toString();
-            return currentPlayer;
+            return getCurrentPlayer();
         }
-        Player player = consumer.postForObject(url("/getPlayer"), body(new P("uuid", uuidOfThisDevice)), Player.class);
+        Player player = consumer.getForObject(url("/getPlayer", new P("uuid", uuidOfThisDevice)), Player.class);
         if (player == null) {
             registerPlayer();
+        } else {
+            setCurrentPlayer(player);
         }
-        currentPlayer = player;
-        return currentPlayer;
+        return getCurrentPlayer();
     }
 
     @Override
@@ -110,6 +118,14 @@ public final class NetServiceImpl implements NetService {
             result.put(param.getKey(), param.getValue().toString());
         }
         return result;
+    }
+
+    private String url(String path, P... getParams) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url(path));
+        for (P param : getParams) {
+            builder.queryParam(param.getKey(), param.getValue().toString());
+        }
+        return builder.build().toString();
     }
 
     private static class P {

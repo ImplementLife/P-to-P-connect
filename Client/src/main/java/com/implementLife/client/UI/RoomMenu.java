@@ -24,6 +24,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static com.formdev.flatlaf.FlatClientProperties.PLACEHOLDER_TEXT;
+import static com.implementLife.client.AsyncService.getAsyncService;
 import static com.implementLife.client.net.NetServiceImpl.getNetService;
 
 public class RoomMenu {
@@ -33,6 +34,7 @@ public class RoomMenu {
     private JTextField fieldFindRoomByUUID;
     private JTextField fieldRoomName;
     private JTextField fieldRoomId;
+    private JTextField fieldMessage;
 
     private JButton btnCreateRoom;
     private JButton btnFind;
@@ -40,6 +42,7 @@ public class RoomMenu {
     private JButton btnSetMeHost;
     private JButton btnConnect;
     private JButton btnRefresh;
+    private JButton btnExit;
 
     private DefaultMutableTreeNode resent_rooms;
     private DefaultMutableTreeNode friends_roms;
@@ -50,7 +53,6 @@ public class RoomMenu {
         initButtons();
         initFields();
         rooms.addTreeSelectionListener(e -> onSelectRoomElement());
-        btnCopyRoomIdToClipboard.addActionListener(e -> onClickBtnCopyRoomIdToClipboard());
     }
 
     private void initFields() {
@@ -59,8 +61,10 @@ public class RoomMenu {
     }
 
     private void initButtons() {
+        btnCopyRoomIdToClipboard.addActionListener(e -> onClickBtnCopyRoomIdToClipboard());
         btnFind.addActionListener(e -> onClickBtnFind());
         btnCreateRoom.addActionListener(e -> onClickBtnCreateRoom());
+        btnExit.addActionListener(e -> onClickBtnExit());
         btnRefresh.addActionListener(e -> onClickBtnRefresh());
         btnRefresh.setIcon(new ImageIcon("icons/IntelliJ/refresh.svg"));
     }
@@ -86,6 +90,7 @@ public class RoomMenu {
     }
 
     private void resetTreeView() {
+        rooms.updateUI();
         DefaultTreeCellRenderer cellRenderer = (DefaultTreeCellRenderer) rooms.getCellRenderer();
         cellRenderer.setOpenIcon(new FlatTreeExpandedIcon());
         cellRenderer.setClosedIcon(new FlatTreeCollapsedIcon());
@@ -110,23 +115,39 @@ public class RoomMenu {
     private void inRoomState(Room room) {
         fieldRoomId.setText(room.getId().toString());
         fieldRoomName.setText(room.getName());
+        setEnableStateInRoom(true);
+    }
 
-        fieldRoomName.setEnabled(false);
-        btnCreateRoom.setEnabled(false);
-        btnSetMeHost.setEnabled(true);
-        btnConnect.setEnabled(true);
+    private void outOfRoomState() {
+        fieldRoomId.setText("");
+        fieldRoomName.setText("");
+        setEnableStateInRoom(false);
+    }
+
+    private void setEnableStateInRoom(boolean inRoom) {
+        fieldRoomName.setEditable(!inRoom);
+        btnCreateRoom.setEnabled(!inRoom);
+        btnSetMeHost.setEnabled(inRoom);
+        btnConnect.setEnabled(inRoom);
+        btnExit.setEnabled(inRoom);
     }
 
     private Map<UUID, Room> allRooms;
 
     private void onClickBtnRefresh() {
-        allRooms = getNetService().getAllRooms().stream().collect(Collectors.toMap(Room::getId, Function.identity()));
-        for (Room room : allRooms.values()) {
-            public_roms.add(new DefaultMutableTreeNode(room.getId()));
-        }
-
-        rooms.updateUI();
-        resetTreeView();
+        getAsyncService().runAsync(() -> {
+            btnRefresh.setEnabled(false);
+            try {
+                allRooms = getNetService().getAllRooms().stream().collect(Collectors.toMap(Room::getId, Function.identity()));
+                public_roms.removeAllChildren();
+                for (Room room : allRooms.values()) {
+                    public_roms.add(new DefaultMutableTreeNode(room.getId()));
+                }
+                resetTreeView();
+            } finally {
+                btnRefresh.setEnabled(true);
+            }
+        });
     }
 
     private void onClickBtnCopyRoomIdToClipboard() {
@@ -137,32 +158,55 @@ public class RoomMenu {
     }
 
     private void onClickBtnFind() {
-        if (fieldFindRoomByUUID.getText().trim().equals("")) return;
-        Room room = getNetService().getRoom(fieldFindRoomByUUID.getText());
-        if (room != null) {
-            resent_rooms.add(new DefaultMutableTreeNode(room.getId().toString()));
-            rooms.updateUI();
-            resetTreeView();
+        getAsyncService().runAsync(() -> {
+            btnFind.setEnabled(false);
+            try {
+                if (fieldFindRoomByUUID.getText().trim().equals("")) return;
+                Room room = getNetService().getRoom(fieldFindRoomByUUID.getText());
+                if (room != null) {
+                    resent_rooms.add(new DefaultMutableTreeNode(room.getId()));
+                    resetTreeView();
+                    inRoomState(room);
+                }
+            } finally {
+                btnFind.setEnabled(true);
+            }
+        });
+    }
 
-            inRoomState(room);
-        }
+    private void onClickBtnExit() {
+        outOfRoomState();
     }
 
     private void onClickBtnCreateRoom() {
-        String name = fieldRoomName.getText();
-        Room room = getNetService().createRoom(name);
-        resent_rooms.add(new DefaultMutableTreeNode(room.getId()));
+        getAsyncService().runAsync(() -> {
+            btnCreateRoom.setEnabled(false);
+            Room room;
+            try {
+                String name = fieldRoomName.getText();
+                room = getNetService().createRoom(name);
+            } finally {
+                btnCreateRoom.setEnabled(true);
+            }
+            if (room != null) {
+                resent_rooms.add(new DefaultMutableTreeNode(room.getId()));
+                resetTreeView();
+                inRoomState(room);
+            }
+        });
     }
 
     private void onSelectRoomElement() {
-        DefaultMutableTreeNode selectedComponent = (DefaultMutableTreeNode) rooms.getLastSelectedPathComponent();
-        if (selectedComponent instanceof JTreeFolderViewNode) return;
+        getAsyncService().runAsync(() -> {
+            DefaultMutableTreeNode selectedComponent = (DefaultMutableTreeNode) rooms.getLastSelectedPathComponent();
+            if (selectedComponent instanceof JTreeFolderViewNode) return;
 
-        UUID roomUuidAsString = (UUID) selectedComponent.getUserObject();
-        Room room = getNetService().getRoom(roomUuidAsString.toString());
-        if (room != null) {
-            inRoomState(room);
-        }
+            UUID roomUuidAsString = (UUID) selectedComponent.getUserObject();
+            Room room = getNetService().getRoom(roomUuidAsString.toString());
+            if (room != null) {
+                inRoomState(room);
+            }
+        });
     }
 
     {
@@ -205,6 +249,7 @@ public class RoomMenu {
         rooms = new JTree();
         Font roomsFont = this.$$$getFont$$$(null, -1, -1, rooms.getFont());
         if (roomsFont != null) rooms.setFont(roomsFont);
+        rooms.setRootVisible(true);
         scrollPane1.setViewportView(rooms);
         btnFind = new JButton();
         btnFind.setText("Find");
@@ -213,10 +258,8 @@ public class RoomMenu {
         btnRefresh.setText("Refresh");
         panel2.add(btnRefresh, new GridConstraints(3, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         final JPanel panel4 = new JPanel();
-        panel4.setLayout(new GridLayoutManager(6, 1, new Insets(0, 0, 0, 0), -1, -1));
+        panel4.setLayout(new GridLayoutManager(4, 1, new Insets(0, 0, 0, 0), -1, -1));
         splitPane1.setRightComponent(panel4);
-        final Spacer spacer1 = new Spacer();
-        panel4.add(spacer1, new GridConstraints(2, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_VERTICAL, 1, GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
         final JPanel panel5 = new JPanel();
         panel5.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
         panel4.add(panel5, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
@@ -240,38 +283,51 @@ public class RoomMenu {
         panel6.add(label4, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         fieldRoomName = new JTextField();
         panel6.add(fieldRoomName, new GridConstraints(1, 1, 1, 2, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(150, -1), null, 0, false));
-        final Spacer spacer2 = new Spacer();
-        panel4.add(spacer2, new GridConstraints(4, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_VERTICAL, 1, GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
         final JPanel panel7 = new JPanel();
-        panel7.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
-        panel4.add(panel7, new GridConstraints(3, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
+        panel7.setLayout(new GridLayoutManager(1, 1, new Insets(10, 0, 10, 0), -1, -1));
+        panel4.add(panel7, new GridConstraints(2, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
         final JTabbedPane tabbedPane1 = new JTabbedPane();
         tabbedPane1.setTabLayoutPolicy(0);
         tabbedPane1.setTabPlacement(1);
         panel7.add(tabbedPane1, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, new Dimension(200, 200), null, 0, false));
         final JPanel panel8 = new JPanel();
         panel8.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
-        tabbedPane1.addTab("Players", panel8);
+        tabbedPane1.addTab("Settings", panel8);
         final JPanel panel9 = new JPanel();
         panel9.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
-        tabbedPane1.addTab("Settings", panel9);
+        tabbedPane1.addTab("Players", panel9);
+        final JScrollPane scrollPane2 = new JScrollPane();
+        scrollPane2.setHorizontalScrollBarPolicy(31);
+        panel9.add(scrollPane2, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
         final JPanel panel10 = new JPanel();
-        panel10.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
+        panel10.setLayout(new GridLayoutManager(2, 1, new Insets(0, 0, 0, 0), -1, -1));
         tabbedPane1.addTab("Chat", panel10);
+        final JScrollPane scrollPane3 = new JScrollPane();
+        panel10.add(scrollPane3, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
         final JPanel panel11 = new JPanel();
-        panel11.setLayout(new GridLayoutManager(1, 4, new Insets(0, 0, 0, 0), -1, -1));
-        panel4.add(panel11, new GridConstraints(5, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
-        btnCreateRoom = new JButton();
-        btnCreateRoom.setText("Create Room");
-        panel11.add(btnCreateRoom, new GridConstraints(0, 3, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        final Spacer spacer3 = new Spacer();
-        panel11.add(spacer3, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, 1, null, null, null, 0, false));
-        btnSetMeHost = new JButton();
-        btnSetMeHost.setText("Set Me Host");
-        panel11.add(btnSetMeHost, new GridConstraints(0, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel11.setLayout(new GridLayoutManager(1, 2, new Insets(0, 0, 0, 0), -1, -1));
+        panel10.add(panel11, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
+        fieldMessage = new JTextField();
+        panel11.add(fieldMessage, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(150, -1), null, 0, false));
         btnConnect = new JButton();
         btnConnect.setText("Connect");
         panel11.add(btnConnect, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        final JPanel panel12 = new JPanel();
+        panel12.setLayout(new GridLayoutManager(1, 4, new Insets(0, 0, 0, 0), -1, -1));
+        panel4.add(panel12, new GridConstraints(3, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
+        btnCreateRoom = new JButton();
+        btnCreateRoom.setText("Create Room");
+        panel12.add(btnCreateRoom, new GridConstraints(0, 3, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        final Spacer spacer1 = new Spacer();
+        panel12.add(spacer1, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, 1, null, null, null, 0, false));
+        btnSetMeHost = new JButton();
+        btnSetMeHost.setEnabled(false);
+        btnSetMeHost.setText("Set Me Host");
+        panel12.add(btnSetMeHost, new GridConstraints(0, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        btnExit = new JButton();
+        btnExit.setEnabled(false);
+        btnExit.setText("Exit");
+        panel12.add(btnExit, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
     }
 
     /**
@@ -302,4 +358,5 @@ public class RoomMenu {
     public JComponent $$$getRootComponent$$$() {
         return root;
     }
+
 }

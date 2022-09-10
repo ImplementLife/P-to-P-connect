@@ -18,7 +18,7 @@ public class ExceptionProxyHandler implements InvocationHandler {
     }
 
     @Override
-    public Object invoke(Object proxy, Method method, Object[] args) {
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         try {
             LOG.info("Invoked method: {}({})", method.getName(), Arrays.toString(args));
             Object invokeResult = method.invoke(origin, args);
@@ -26,7 +26,7 @@ public class ExceptionProxyHandler implements InvocationHandler {
             return invokeResult;
         } catch (Throwable throwable) {
             UIProvider.showErrDialog(throwable);
+            throw throwable;
         }
-        return null;
     }
 }
