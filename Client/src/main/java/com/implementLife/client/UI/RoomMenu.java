@@ -3,6 +3,8 @@ package com.implementLife.client.UI;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.icons.FlatTreeCollapsedIcon;
 import com.formdev.flatlaf.icons.FlatTreeExpandedIcon;
+import com.implementLife.client.UI.components.JTreeFolderNodeView;
+import com.implementLife.client.UI.components.JTreeRoomView;
 import com.implementLife.commonDTO.comServerEntity.Room;
 import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
@@ -44,9 +46,9 @@ public class RoomMenu {
     private JButton btnRefresh;
     private JButton btnExit;
 
-    private DefaultMutableTreeNode resent_rooms;
-    private DefaultMutableTreeNode friends_roms;
-    private JTreeFolderViewNode public_roms;
+    private JTreeFolderNodeView resent_rooms;
+    private JTreeFolderNodeView friends_roms;
+    private JTreeFolderNodeView public_roms;
 
     public RoomMenu() {
         initTreeListOfRooms();
@@ -70,9 +72,9 @@ public class RoomMenu {
     }
 
     private void initTreeListOfRooms() {
-        resent_rooms = new JTreeFolderViewNode("Resent Rooms");
-        friends_roms = new JTreeFolderViewNode("Friends Rooms");
-        public_roms = new JTreeFolderViewNode("Public Rooms");
+        resent_rooms = new JTreeFolderNodeView("Resent Rooms");
+        friends_roms = new JTreeFolderNodeView("Friends Rooms");
+        public_roms = new JTreeFolderNodeView("Public Rooms");
 
         DefaultMutableTreeNode rootNode = clearTreeAndGetRootNode(rooms);
         rootNode.add(resent_rooms);
@@ -141,7 +143,7 @@ public class RoomMenu {
                 allRooms = getNetService().getAllRooms().stream().collect(Collectors.toMap(Room::getId, Function.identity()));
                 public_roms.removeAllChildren();
                 for (Room room : allRooms.values()) {
-                    public_roms.add(new DefaultMutableTreeNode(room.getId()));
+                    public_roms.add(new DefaultMutableTreeNode(new JTreeRoomView(room)));
                 }
                 resetTreeView();
             } finally {
@@ -164,7 +166,7 @@ public class RoomMenu {
                 if (fieldFindRoomByUUID.getText().trim().equals("")) return;
                 Room room = getNetService().getRoom(fieldFindRoomByUUID.getText());
                 if (room != null) {
-                    resent_rooms.add(new DefaultMutableTreeNode(room.getId()));
+                    resent_rooms.add(new DefaultMutableTreeNode(new JTreeRoomView(room)));
                     resetTreeView();
                     inRoomState(room);
                 }
@@ -189,7 +191,7 @@ public class RoomMenu {
                 btnCreateRoom.setEnabled(true);
             }
             if (room != null) {
-                resent_rooms.add(new DefaultMutableTreeNode(room.getId()));
+                resent_rooms.add(new DefaultMutableTreeNode(new JTreeRoomView(room)));
                 resetTreeView();
                 inRoomState(room);
             }
@@ -199,9 +201,9 @@ public class RoomMenu {
     private void onSelectRoomElement() {
         getAsyncService().runAsync(() -> {
             DefaultMutableTreeNode selectedComponent = (DefaultMutableTreeNode) rooms.getLastSelectedPathComponent();
-            if (selectedComponent instanceof JTreeFolderViewNode) return;
+            if (selectedComponent instanceof JTreeFolderNodeView) return;
 
-            UUID roomUuidAsString = (UUID) selectedComponent.getUserObject();
+            UUID roomUuidAsString = ((JTreeRoomView) selectedComponent.getUserObject()).getId();
             Room room = getNetService().getRoom(roomUuidAsString.toString());
             if (room != null) {
                 inRoomState(room);
@@ -236,11 +238,16 @@ public class RoomMenu {
         panel2.setLayout(new GridLayoutManager(4, 2, new Insets(0, 0, 0, 0), -1, -1));
         splitPane1.setLeftComponent(panel2);
         final JPanel panel3 = new JPanel();
-        panel3.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
+        panel3.setLayout(new GridLayoutManager(1, 3, new Insets(0, 0, 0, 0), -1, -1));
         panel2.add(panel3, new GridConstraints(0, 0, 1, 2, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
         final JLabel label1 = new JLabel();
-        label1.setText("Last Rooms");
+        label1.setText("Rooms");
         panel3.add(label1, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        btnRefresh = new JButton();
+        btnRefresh.setText("Refresh");
+        panel3.add(btnRefresh, new GridConstraints(0, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        final Spacer spacer1 = new Spacer();
+        panel3.add(spacer1, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, 1, null, null, null, 0, false));
         fieldFindRoomByUUID = new JTextField();
         panel2.add(fieldFindRoomByUUID, new GridConstraints(2, 0, 1, 2, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(150, -1), null, 0, false));
         final JScrollPane scrollPane1 = new JScrollPane();
@@ -253,10 +260,7 @@ public class RoomMenu {
         scrollPane1.setViewportView(rooms);
         btnFind = new JButton();
         btnFind.setText("Find");
-        panel2.add(btnFind, new GridConstraints(3, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        btnRefresh = new JButton();
-        btnRefresh.setText("Refresh");
-        panel2.add(btnRefresh, new GridConstraints(3, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel2.add(btnFind, new GridConstraints(3, 0, 1, 2, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         final JPanel panel4 = new JPanel();
         panel4.setLayout(new GridLayoutManager(4, 1, new Insets(0, 0, 0, 0), -1, -1));
         splitPane1.setRightComponent(panel4);
@@ -270,7 +274,7 @@ public class RoomMenu {
         panel6.setLayout(new GridLayoutManager(2, 3, new Insets(0, 0, 0, 0), -1, -1));
         panel4.add(panel6, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
         final JLabel label3 = new JLabel();
-        label3.setText("Room UUID:");
+        label3.setText("Room ID:");
         panel6.add(label3, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         fieldRoomId = new JTextField();
         fieldRoomId.setEditable(false);
@@ -310,7 +314,7 @@ public class RoomMenu {
         fieldMessage = new JTextField();
         panel11.add(fieldMessage, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(150, -1), null, 0, false));
         btnConnect = new JButton();
-        btnConnect.setText("Connect");
+        btnConnect.setText("Send");
         panel11.add(btnConnect, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         final JPanel panel12 = new JPanel();
         panel12.setLayout(new GridLayoutManager(1, 4, new Insets(0, 0, 0, 0), -1, -1));
@@ -318,8 +322,8 @@ public class RoomMenu {
         btnCreateRoom = new JButton();
         btnCreateRoom.setText("Create Room");
         panel12.add(btnCreateRoom, new GridConstraints(0, 3, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        final Spacer spacer1 = new Spacer();
-        panel12.add(spacer1, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, 1, null, null, null, 0, false));
+        final Spacer spacer2 = new Spacer();
+        panel12.add(spacer2, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, 1, null, null, null, 0, false));
         btnSetMeHost = new JButton();
         btnSetMeHost.setEnabled(false);
         btnSetMeHost.setText("Set Me Host");
