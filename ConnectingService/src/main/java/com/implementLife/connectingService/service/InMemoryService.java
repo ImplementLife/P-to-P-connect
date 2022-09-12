@@ -1,6 +1,7 @@
 package com.implementLife.connectingService.service;
 
 
+import com.implementLife.commonDTO.comServerEntity.Event;
 import com.implementLife.commonDTO.comServerEntity.Player;
 import com.implementLife.commonDTO.comServerEntity.Room;
 
@@ -26,15 +27,15 @@ public class InMemoryService implements RoomService {
     }
 
     @Override
-    public Player updatePlayerIp(UUID uuid, String ip) {
-        Player player = playersById.get(uuid);
+    public Player updatePlayerIp(UUID id, String ip) {
+        Player player = playersById.get(id);
         player.setIp(ip);
         return player;
     }
 
     @Override
-    public Player getPlayer(String uuid) {
-        return playersById.get(UUID.fromString(uuid));
+    public Player getPlayer(UUID id) {
+        return playersById.get(id);
     }
 
     @Override
@@ -55,40 +56,24 @@ public class InMemoryService implements RoomService {
     }
 
     @Override
-    public Room setNewHostIP(String ip, String uuidRoom) {
-        Room room = rooms.get(UUID.fromString(uuidRoom));
+    public Room setNewHostIP(UUID uuidRoom, String ip) {
+        Room room = rooms.get(uuidRoom);
         room.setHostIP(ip);
         return room;
     }
 
     @Override
-    public Room getRoom(String uuid) {
-        return rooms.get(UUID.fromString(uuid));
+    public Room getRoom(UUID uuid) {
+        return rooms.get(uuid);
     }
 
     @Override
-    public void notifyPlayersHostChanged(Room room) {
-        for (Player player : room.getPlayers()) {
-            notifyPlayer(player);
-        }
-    }
-
-    @Override
-    public void notifyPlayersHostIpChanged(Room room) {
-
-    }
-
-    private void notifyPlayer(Player player) {
+    public void sendEventToPlayers(UUID roomId, Event event) {
 
     }
 
     @Override
-    public void changeHost(Room room, Player player) {
-
-    }
-
-    @Override
-    public void changeHostIp(Room room, Player player) {
+    public void changeHost(UUID roomId, UUID playerId, String ip) {
 
     }
 

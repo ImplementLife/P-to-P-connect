@@ -18,23 +18,23 @@ public class RoomController {
 
     @PutMapping("/setNewHostIP")
     public ResponseEntity<String> setNewHostIP(HttpServletRequest request, @RequestParam String roomUUID) {
-        String ip = roomService.setNewHostIP(request.getRemoteAddr(), roomUUID).getHostIP();
+        String ip = roomService.setNewHostIP(UUID.fromString(roomUUID), request.getRemoteAddr()).getHostIP();
         return ResponseEntity.ok(ip);
     }
 
     @GetMapping("/getRoomHostIP")
     public ResponseEntity<String> getRoomHostIP(HttpServletRequest request, @RequestParam String uuid) {
-        return ResponseEntity.ok(roomService.getRoom(uuid).getHostIP());
+        return ResponseEntity.ok(roomService.getRoom(UUID.fromString(uuid)).getHostIP());
     }
 
     @GetMapping("/getPlayer")
     public ResponseEntity<Player> getPlayer(HttpServletRequest request, @RequestParam String uuid) {
-        return ResponseEntity.ok(roomService.getPlayer(uuid));
+        return ResponseEntity.ok(roomService.getPlayer(UUID.fromString(uuid)));
     }
 
     @GetMapping("/getRoom")
     public ResponseEntity<Room> getRoom(HttpServletRequest request, @RequestParam String uuid) {
-        return ResponseEntity.ok(roomService.getRoom(uuid));
+        return ResponseEntity.ok(roomService.getRoom(UUID.fromString(uuid)));
     }
 
     @PostMapping("/reg")
